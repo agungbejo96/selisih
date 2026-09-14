@@ -14,6 +14,66 @@ import plotly.graph_objects as go
 from datetime import datetime
 import io
 from PIL import Image
+import os
+import pickle
+
+CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".app_data")
+DATA_CACHE_FILE = os.path.join(CACHE_DIR, "rekon_data_cache.pkl")
+
+def save_persistent_state(data_scopes, active_scope=None):
+    try:
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        payload = {
+            "data_scopes": data_scopes,
+            "active_scope": active_scope,
+            "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        with open(DATA_CACHE_FILE, "wb") as f:
+            pickle.dump(payload, f)
+    except Exception:
+        pass
+
+def load_persistent_state():
+    if os.path.exists(DATA_CACHE_FILE):
+        try:
+            with open(DATA_CACHE_FILE, "rb") as f:
+                return pickle.load(f)
+        except Exception:
+            return None
+    return None
+
+def get_query_param(key, default=None):
+    try:
+        if hasattr(st, "query_params") and key in st.query_params:
+            val = st.query_params[key]
+            return val if val else default
+        elif hasattr(st, "experimental_get_query_params"):
+            qp = st.experimental_get_query_params()
+            if key in qp and qp[key]:
+                return qp[key][0]
+    except Exception:
+        pass
+    return default
+
+def set_query_param(key, value):
+    try:
+        if hasattr(st, "query_params"):
+            st.query_params[key] = str(value)
+        elif hasattr(st, "experimental_set_query_params"):
+            qp = st.experimental_get_query_params()
+            qp[key] = [str(value)]
+            st.experimental_set_query_params(**qp)
+    except Exception:
+        pass
+
+def clear_query_params():
+    try:
+        if hasattr(st, "query_params"):
+            st.query_params.clear()
+        elif hasattr(st, "experimental_set_query_params"):
+            st.experimental_set_query_params()
+    except Exception:
+        pass
 
 def safe_float(val):
     if val is None or pd.isna(val):
@@ -188,327 +248,812 @@ st.set_page_config(
 # Custom CSS for Executive Abacus Malang Branding & Data Display
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-    
-    html, body, [class*="css"] {
-        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap');
+
+    :root {
+        --navy: #002B49;
+        --navy-deep: #001F3F;
+        --blue: #00529C;
+        --blue-bright: #0072CE;
+        --gold: #F59E0B;
+        --gold-bright: #FBBF24;
+        --bg-page: #FFFFFF;
+        --bg-card: #F9FAFB;
+        --border: #E2E8F0;
+        --border-light: #D9E3ED;
+        --text-primary: #111827;
+        --text-secondary: #374151;
+        --text-muted: #6B7280;
+        --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+        --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+        --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12);
+        --shadow-xl: 0 24px 60px rgba(0, 0, 0, 0.18);
+        --radius-sm: 8px;
+        --radius-md: 14px;
+        --radius-lg: 22px;
+        --radius-xl: 28px;
+        --font-display: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+        --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+        --font-mono: 'SF Mono', Monaco, 'Cascadia Code', monospace;
     }
+
+    html, body, [class*="css"] {
+        font-family: var(--font-sans);
+        font-weight: 500;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+    }
+
+    /* ---- Global Page Background ---- */
+    .stApp {
+        background: var(--bg-page);
+    }
+    .block-container {
+        padding: 1.6rem 2rem 3rem 2rem;
+        max-width: 100%;
+    }
+
+    /* ---- Executive Header ---- */
     .main-header {
-        background: linear-gradient(135deg, #002B49 0%, #00529C 50%, #0072CE 100%);
-        padding: 24px 30px;
-        border-radius: 12px;
-        color: white;
-        margin-bottom: 25px;
-        box-shadow: 0 10px 20px rgba(0, 43, 73, 0.15);
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: linear-gradient(135deg, var(--navy-deep) 0%, var(--navy) 40%, var(--blue) 100%);
+        padding: 26px 32px;
+        border-radius: var(--radius-lg);
+        color: #FFFFFF;
+        margin-bottom: 28px;
+        box-shadow: var(--shadow-lg);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        position: relative;
+        overflow: hidden;
+    }
+    .main-header::before {
+        content: "";
+        position: absolute;
+        top: -60px;
+        right: -60px;
+        width: 220px;
+        height: 220px;
+        background: radial-gradient(circle, rgba(251, 191, 36, 0.14) 0%, rgba(251, 191, 36, 0) 70%);
+        border-radius: 50%;
     }
     .main-header h1 {
         color: #FFFFFF !important;
-        margin: 0;
+        margin: 0 0 8px 0;
         font-size: 30px;
         font-weight: 800;
         letter-spacing: -0.5px;
+        position: relative;
+        z-index: 1;
+        font-family: var(--font-display);
     }
     .main-header p {
-        color: #D1E5F7 !important;
-        margin: 6px 0 0 0;
+        color: rgba(225, 236, 255, 0.85) !important;
+        margin: 0;
         font-size: 14px;
         font-weight: 500;
+        position: relative;
+        z-index: 1;
+        letter-spacing: 0.1px;
     }
     .status-badge {
-        background-color: rgba(255, 255, 255, 0.2);
-        color: #FFFFFF;
-        padding: 4px 12px;
+        background-color: rgba(251, 191, 36, 0.22);
+        color: #FEF3C7;
+        padding: 5px 14px;
         border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
+        font-size: 11px;
+        font-weight: 700;
         display: inline-block;
-        margin-top: 10px;
+        margin-top: 12px;
+        letter-spacing: 0.8px;
+        border: 1px solid rgba(251, 191, 36, 0.3);
+        position: relative;
+        z-index: 1;
     }
+
+    /* ---- Card Box ---- */
     .card-box {
-        background: #FFFFFF;
-        border-radius: 10px;
-        padding: 18px;
-        border: 1px solid #E2E8F0;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-        margin-bottom: 15px;
+        background: var(--bg-card);
+        border-radius: var(--radius-md);
+        padding: 20px 22px;
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 18px;
+        transition: box-shadow 0.2s ease, transform 0.2s ease;
+    }
+    .card-box:hover {
+        box-shadow: var(--shadow-md);
     }
     .month-badge {
-        background-color: #00529C;
+        background: linear-gradient(135deg, var(--blue), var(--blue-bright));
         color: white;
-        padding: 4px 10px;
+        padding: 5px 12px;
         border-radius: 6px;
-        font-size: 12px;
-        font-weight: bold;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
     }
     .empty-banner {
-        background: #FEF3C7;
-        border-left: 5px solid #F59E0B;
-        padding: 15px 20px;
-        border-radius: 8px;
+        background: linear-gradient(135deg, #FFFBEB, #FEF3C7);
+        border-left: 5px solid var(--gold);
+        padding: 16px 22px;
+        border-radius: var(--radius-sm);
         color: #92400E;
-        margin-bottom: 20px;
+        margin-bottom: 22px;
+        font-size: 14px;
+        box-shadow: var(--shadow-sm);
     }
+    /* ===== ELEGANT TABLE STYLING ===== */
     .stTable {
-        font-size: 12px;
+        font-size: 13px;
+        border-collapse: separate;
+        border-spacing: 0;
+        width: 100%;
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        box-shadow: 0 4px 20px rgba(0, 43, 73, 0.08);
+        border: 1px solid #E2E8F0;
     }
-    .login-brand {
-        min-height: 420px;
-        padding: 48px 42px;
+    .stTable thead tr th,
+    [data-testid="stTable"] thead tr th,
+    thead th {
+        background: linear-gradient(135deg, #0A2540 0%, #00529C 55%, #0072CE 100%) !important;
+        color: #FFFFFF !important;
+        font-size: 10.5px !important;
+        font-weight: 800 !important;
+        letter-spacing: 1px !important;
+        text-transform: uppercase !important;
+        padding: 14px 16px !important;
+        border-bottom: 3px solid var(--gold) !important;
+        white-space: nowrap;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    .stTable tbody tr td,
+    [data-testid="stTable"] tbody tr td,
+    tbody td {
+        padding: 11px 16px !important;
+        font-size: 12.5px !important;
+        color: var(--text-primary) !important;
+        border-bottom: 1px solid #EDF2F7 !important;
+        vertical-align: middle !important;
+        transition: background 0.15s ease, transform 0.1s ease;
+    }
+    .stTable tbody tr:nth-child(odd) td,
+    tbody tr:nth-child(odd) td {
+        background: #FFFFFF !important;
+    }
+    .stTable tbody tr:nth-child(even) td,
+    tbody tr:nth-child(even) td {
+        background: #F5F9FF !important;
+    }
+    .stTable tbody tr:hover td,
+    tbody tr:hover td {
+        background: linear-gradient(90deg, #EFF6FF, #DBEAFE) !important;
+        color: var(--navy) !important;
+    }
+    [data-testid="stDataFrame"] {
+        border-radius: 12px !important;
+        overflow: hidden !important;
+        box-shadow: 0 4px 20px rgba(0, 43, 73, 0.08) !important;
+        border: 1px solid #E2E8F0 !important;
+    }
+    [data-testid="stDataFrame"] th {
+        background: linear-gradient(135deg, #0A2540 0%, #00529C 55%, #0072CE 100%) !important;
+        color: #FFFFFF !important;
+        font-weight: 800 !important;
+        font-size: 10.5px !important;
+        letter-spacing: 1px !important;
+        text-transform: uppercase !important;
+        padding: 13px 14px !important;
+        border-bottom: 3px solid var(--gold) !important;
+        white-space: nowrap;
+    }
+    [data-testid="stDataFrame"] td {
+        font-size: 12.5px !important;
+        padding: 10px 14px !important;
+        border-bottom: 1px solid #EDF2F7 !important;
+    }
+    [data-testid="stDataFrame"] tbody tr:nth-child(even) {
+        background: #F5F9FF !important;
+    }
+    [data-testid="stDataFrame"] tbody tr:hover {
+        background: #EFF6FF !important;
+    }
+    [data-testid="stDataFrame"] [data-testid="stDataFrameRow"]:hover {
+        background: #EFF6FF !important;
+    }
+    /* Scrollbar styling for tables */
+    [data-testid="stDataFrame"] ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    [data-testid="stDataFrame"] ::-webkit-scrollbar-track {
+        background: #F1F5F9;
+        border-radius: 4px;
+    }
+    [data-testid="stDataFrame"] ::-webkit-scrollbar-thumb {
+        background: #CBD5E1;
+        border-radius: 4px;
+    }
+    [data-testid="stDataFrame"] ::-webkit-scrollbar-thumb:hover {
+        background: #94A3B8;
+    }
+    /* Data editor styling */
+    [data-testid="stDataEditor"] {
+        border-radius: 12px !important;
+        overflow: hidden !important;
+        box-shadow: 0 4px 20px rgba(0, 43, 73, 0.08) !important;
+        border: 1px solid #E2E8F0 !important;
+    }
+    [data-testid="stDataEditor"] th {
+        background: linear-gradient(135deg, #0A2540 0%, #00529C 55%, #0072CE 100%) !important;
+        color: #FFFFFF !important;
+        font-weight: 800 !important;
+        font-size: 10.5px !important;
+        letter-spacing: 1px !important;
+        text-transform: uppercase !important;
+        padding: 13px 14px !important;
+        border-bottom: 3px solid var(--gold) !important;
+    }
+
+    /* ===== ELEGANT SIDEBAR / MENU STYLING ===== */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #FFFFFF 0%, #F0F6FF 100%);
+        border-right: 1px solid #CBD5E1;
+        box-shadow: 2px 0 16px rgba(0, 43, 73, 0.07);
+    }
+    [data-testid="stSidebar"] .block-container {
+        padding: 1.4rem 1rem 2.4rem 1rem;
+    }
+    .sidebar-brand {
+        background: linear-gradient(145deg, var(--navy-deep) 0%, var(--blue) 100%);
+        border-radius: var(--radius-md);
+        padding: 22px 16px 18px 16px;
         color: #FFFFFF;
-        background: linear-gradient(145deg, #002B49 0%, #00529C 66%, #0072CE 100%);
+        box-shadow: 0 8px 24px rgba(0, 43, 73, 0.28);
+        margin-bottom: 22px;
+        text-align: center;
         position: relative;
-        border-radius: 18px 0 0 18px;
-        box-shadow: 0 24px 60px rgba(0, 43, 73, 0.16);
+        overflow: hidden;
     }
-    .login-brand:after {
+    .sidebar-brand::after {
         content: "";
         position: absolute;
-        width: 210px;
-        height: 210px;
-        right: -72px;
-        bottom: -74px;
-        border: 1px solid rgba(251, 191, 36, 0.42);
+        bottom: -30px;
+        right: -30px;
+        width: 100px;
+        height: 100px;
+        background: radial-gradient(circle, rgba(245, 158, 11, 0.18) 0%, transparent 70%);
         border-radius: 50%;
     }
-    .login-kicker {
-        color: #FBBF24;
-        font-size: 11px;
+    .sidebar-brand .brand-name {
+        font-size: 22px;
+        font-weight: 900;
+        letter-spacing: 3px;
+        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+        font-family: var(--font-display);
+    }
+    .sidebar-brand .brand-subtitle {
+        color: var(--gold-bright);
+        font-size: 9.5px;
+        font-weight: 800;
+        letter-spacing: 2.5px;
+        text-transform: uppercase;
+        margin-top: 5px;
+        opacity: 0.9;
+    }
+    .sidebar-section-label {
+        color: #475569;
+        font-size: 10.5px;
         font-weight: 800;
         letter-spacing: 2px;
         text-transform: uppercase;
-        margin: 34px 0 14px 0;
+        margin: 26px 4px 12px 4px;
+        padding: 0 4px 10px 4px;
+        border-bottom: 2px solid #00529C;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--font-display);
     }
-    .login-brand h1 {
-        color: #FFFFFF !important;
-        font-size: 34px;
-        line-height: 1.15;
-        margin: 0;
-        letter-spacing: 0;
-    }
-    .login-brand p {
-        color: #D9EAF8 !important;
-        font-size: 14px;
-        line-height: 1.7;
-        max-width: 340px;
-        margin-top: 18px;
-    }
-    .login-panel {
-        min-height: 430px;
-        padding: 52px 44px 40px 44px;
-        background: #FFFFFF;
-    }
-    .login-form-wrap {
-        background: #FFFFFF;
-        border: 1px solid #D9E3ED;
-        border-radius: 18px;
-        min-height: 420px;
-        padding: 42px 38px 32px 38px;
-        box-shadow: 0 24px 60px rgba(0, 43, 73, 0.16);
-    }
-    .st-key-login_brand_card,
-    .st-key-login_form_card {
-        height: 100%;
-    }
-    .st-key-login_brand_card > div,
-    .st-key-login_form_card > div {
-        height: 100%;
-    }
-    .st-key-login_form_card {
-        background: #FFFFFF;
-        border: 1px solid #D9E3ED;
-        border-radius: 18px;
-        padding: 42px 38px 32px 38px;
-        box-shadow: 0 24px 60px rgba(0, 43, 73, 0.16);
-    }
-    [data-testid="stSidebar"] {
-        background: #F5F8FB;
-        border-right: 1px solid #D9E3ED;
-    }
-    [data-testid="stSidebar"] .block-container {
-        padding: 1.4rem 1rem 2rem 1rem;
-    }
-    .sidebar-brand {
-        background: linear-gradient(145deg, #002B49, #00529C);
-        border-radius: 14px;
-        padding: 18px 14px 16px 14px;
-        color: #FFFFFF;
-        box-shadow: 0 10px 24px rgba(0, 43, 73, 0.16);
-        margin-bottom: 18px;
-    }
-    .sidebar-brand .brand-name {
-        font-size: 20px;
-        font-weight: 800;
-        letter-spacing: 1.5px;
-    }
-    .sidebar-brand .brand-subtitle {
-        color: #FBBF24;
-        font-size: 9px;
-        font-weight: 800;
-        letter-spacing: 1.6px;
-        margin-top: 3px;
-    }
-    .sidebar-section-label {
-        color: #64748B;
-        font-size: 10px;
-        font-weight: 800;
-        letter-spacing: 1.3px;
-        text-transform: uppercase;
-        margin: 19px 0 8px 2px;
+    .sidebar-section-label::before {
+        content: "";
+        width: 4px;
+        height: 4px;
+        background: var(--gold);
+        border-radius: 50%;
+        display: inline-block;
     }
     .sidebar-session {
         background: #FFFFFF;
-        border: 1px solid #D9E3ED;
-        border-radius: 10px;
-        padding: 11px 12px;
-        color: #002B49;
-        font-size: 12px;
-        line-height: 1.5;
-        box-shadow: 0 4px 12px rgba(0, 43, 73, 0.06);
+        border: 1px solid var(--border-light);
+        border-left: 3px solid var(--blue-bright);
+        border-radius: var(--radius-sm);
+        padding: 13px 15px;
+        color: var(--navy);
+        font-size: 12.5px;
+        line-height: 1.7;
+        box-shadow: var(--shadow-sm);
+        font-family: var(--font-sans);
     }
     .sidebar-session span {
-        color: #64748B;
-        font-size: 10px;
+        color: var(--text-muted);
+        font-size: 10.5px;
         text-transform: uppercase;
-        letter-spacing: 0.8px;
+        letter-spacing: 1px;
+    }
+
+    /* ===== SIDEBAR BRAND CARD (Logo + Live Pill) ===== */
+    .sidebar-brand-card {
+        background: linear-gradient(145deg, var(--navy-deep) 0%, var(--navy) 55%, var(--blue) 100%);
+        border-radius: var(--radius-md);
+        padding: 20px 16px 18px 16px;
+        color: #FFFFFF;
+        box-shadow: 0 8px 24px rgba(0, 43, 73, 0.28);
+        margin-bottom: 20px;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+    .sidebar-brand-card::after {
+        content: "";
+        position: absolute;
+        bottom: -30px;
+        right: -30px;
+        width: 100px;
+        height: 100px;
+        background: radial-gradient(circle, rgba(245, 158, 11, 0.18) 0%, transparent 70%);
+        border-radius: 50%;
+    }
+    .sidebar-brand-logo {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 14px;
+        position: relative;
+        z-index: 1;
+    }
+    .sidebar-live-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(251, 191, 36, 0.18);
+        border: 1px solid rgba(251, 191, 36, 0.3);
+        color: #FEF3C7;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 1.2px;
+        text-transform: uppercase;
+        padding: 6px 14px;
+        border-radius: 20px;
+        position: relative;
+        z-index: 1;
+        font-family: var(--font-display);
+    }
+    .live-dot {
+        width: 7px;
+        height: 7px;
+        background: #34D399;
+        border-radius: 50%;
+        display: inline-block;
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.5; transform: scale(0.85); }
+    }
+
+    /* ===== SIDEBAR PROFILE BOX ===== */
+    .sidebar-profile-box {
+        background: #FFFFFF;
+        border: 1px solid var(--border-light);
+        border-radius: var(--radius-md);
+        padding: 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 20px;
+        font-family: var(--font-sans);
+    }
+    .profile-avatar {
+        width: 46px;
+        height: 46px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--blue), var(--blue-bright));
+        color: #FFFFFF;
+        font-size: 17px;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        box-shadow: 0 4px 12px rgba(0, 82, 156, 0.3);
+        font-family: var(--font-display);
+    }
+    .profile-info {
+        flex: 1;
+        min-width: 0;
+    }
+    .profile-name {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--navy);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-family: var(--font-display);
+    }
+    .profile-role-badge {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 1px;
+        padding: 4px 12px;
+        border-radius: 12px;
+        margin-top: 5px;
+        text-transform: uppercase;
+        font-family: var(--font-display);
+    }
+    .role-badge-admin {
+        background: linear-gradient(135deg, #EF4444, #F97316);
+        color: #FFFFFF;
+    }
+    .role-badge-user {
+        background: linear-gradient(135deg, #3B82F6, #6366F1);
+        color: #FFFFFF;
+    }
+    .role-badge-supervisor {
+        background: linear-gradient(135deg, #10B981, #059669);
+        color: #FFFFFF;
     }
     [data-testid="stSidebar"] [role="radiogroup"] {
-        gap: 3px;
+        gap: 6px;
+        display: flex;
+        flex-direction: column;
     }
     [data-testid="stSidebar"] [role="radiogroup"] label {
-        border-radius: 8px;
-        padding: 7px 9px;
-        color: #334155;
-        transition: background-color 0.2s ease, color 0.2s ease;
+        border-radius: 10px !important;
+        padding: 12px 16px !important;
+        color: var(--text-secondary) !important;
+        transition: all 0.25s ease !important;
+        font-weight: 600 !important;
+        font-size: 13px !important;
+        border: 1px solid #E2E8F0 !important;
+        background: #FFFFFF !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04) !important;
+        margin-bottom: 3px !important;
+        position: relative;
+        font-family: var(--font-sans);
     }
     [data-testid="stSidebar"] [role="radiogroup"] label:hover {
-        background: #E7F0F8;
-        color: #002B49;
+        background: linear-gradient(90deg, #F0F7FF, #E8F1FF) !important;
+        color: var(--blue) !important;
+        border-color: #93C5FD !important;
+        transform: translateX(4px);
+        box-shadow: 0 4px 12px rgba(0, 82, 156, 0.15) !important;
     }
     [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {
-        background: #DCECF8;
-        color: #00529C;
-        font-weight: 700;
+        background: linear-gradient(135deg, #0A2540 0%, #00529C 100%) !important;
+        color: #FFFFFF !important;
+        font-weight: 700 !important;
+        border: 1px solid #00529C !important;
+        box-shadow: 0 4px 16px rgba(0, 82, 156, 0.3) !important;
+        transform: translateX(2px);
+    }
+    [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked)::after {
+        content: "▸";
+        position: absolute;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--gold-bright);
+        font-size: 12px;
     }
     [data-testid="stSidebar"] [data-testid="stExpander"] {
-        border-color: #D9E3ED;
+        border: 1px solid #E2E8F0;
+        border-radius: 10px;
+        background: #FFFFFF;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        margin-bottom: 6px;
+    }
+    [data-testid="stSidebar"] [data-testid="stExpander"] summary {
+        font-weight: 700;
+        color: var(--navy);
+        font-size: 13px;
+        padding: 4px 2px;
+        font-family: var(--font-display);
+    }
+    [data-testid="stSidebar"] [data-testid="stExpander"] summary:hover {
+        color: var(--blue);
+    }
+    [data-testid="stSidebar"] .stSelectbox > div > div {
+        border-radius: 8px;
+        border: 1px solid #E2E8F0;
+        background: #FFFFFF;
+    }
+    [data-testid="stSidebar"] .stSelectbox > div > div:hover {
+        border-color: #93C5FD;
+    }
+    [data-testid="stSidebar"] .stButton > button {
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 12.5px;
+        border: 1px solid #E2E8F0;
+        background: #FFFFFF;
+        color: var(--navy);
+        transition: all 0.2s ease;
+    }
+    [data-testid="stSidebar"] .stButton > button:hover {
+        background: #F0F7FF;
+        border-color: #93C5FD;
+        color: var(--blue);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 82, 156, 0.12);
+    }
+    [data-testid="stSidebar"] .stMultiselect > div > div {
+        border-radius: 8px;
+        border: 1px solid #E2E8F0;
+        background: #FFFFFF;
+    }
+    [data-testid="stSidebar"] .stMultiselect > div > div:hover {
+        border-color: #93C5FD;
     }
     .access-hero {
-        background: linear-gradient(135deg, #002B49 0%, #00529C 100%);
-        border-radius: 10px;
-        padding: 20px 24px;
+        background: linear-gradient(135deg, var(--navy-deep), var(--blue));
+        border-radius: var(--radius-md);
+        padding: 24px 28px;
         color: #FFFFFF;
-        margin-bottom: 18px;
-        box-shadow: 0 12px 28px rgba(0, 43, 73, 0.14);
+        margin-bottom: 24px;
+        box-shadow: var(--shadow-lg);
+        position: relative;
+        overflow: hidden;
+        font-family: var(--font-display);
+    }
+    .access-hero::before {
+        content: "";
+        position: absolute;
+        top: -50px;
+        right: -50px;
+        width: 160px;
+        height: 160px;
+        background: radial-gradient(circle, rgba(251, 191, 36, 0.12) 0%, rgba(251, 191, 36, 0) 70%);
+        border-radius: 50%;
     }
     .access-hero h1 {
         color: #FFFFFF !important;
-        font-size: 24px;
+        font-size: 28px;
+        font-weight: 800;
         margin: 0;
-        letter-spacing: 0;
+        letter-spacing: -0.4px;
+        position: relative;
+        z-index: 1;
+        font-family: var(--font-display);
     }
     .access-hero p {
-        color: #D9EAF8 !important;
-        font-size: 13px;
-        margin: 7px 0 0 0;
+        color: rgba(225, 236, 255, 0.88) !important;
+        font-size: 14px;
+        margin: 10px 0 0 0;
+        position: relative;
+        z-index: 1;
+        font-weight: 500;
     }
     .access-role-card {
-        background: #FFFFFF;
-        border: 1px solid #D9E3ED;
-        border-left: 4px solid #F59E0B;
-        border-radius: 10px;
-        padding: 13px 16px;
-        margin: 12px 0 16px 0;
-        color: #334155;
-        font-size: 12px;
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-left: 4px solid var(--gold);
+        border-radius: var(--radius-sm);
+        padding: 16px 20px;
+        margin: 16px 0 20px 0;
+        color: var(--text-secondary);
+        font-size: 13px;
+        box-shadow: var(--shadow-sm);
+        font-family: var(--font-sans);
+        line-height: 1.7;
     }
     .acs-summary-card {
-        background: #FFFFFF;
-        border: 1px solid #E2E8F0;
-        border-top: 4px solid #F59E0B;
-        border-radius: 10px;
-        padding: 16px 17px 15px 17px;
-        min-height: 128px;
-        box-shadow: 0 5px 14px rgba(0, 43, 73, 0.07);
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-top: 4px solid var(--gold);
+        border-radius: var(--radius-sm);
+        padding: 20px 21px 19px 21px;
+        min-height: 136px;
+        box-shadow: var(--shadow-sm);
+        transition: box-shadow 0.2s ease, transform 0.2s ease;
+        font-family: var(--font-sans);
+    }
+    .acs-summary-card:hover {
+        box-shadow: var(--shadow-md);
+        transform: translateY(-2px);
     }
     .acs-summary-month {
-        color: #64748B;
-        font-size: 11px;
+        color: var(--text-muted);
+        font-size: 11.5px;
         font-weight: 800;
-        letter-spacing: 0.7px;
+        letter-spacing: 1px;
         text-transform: uppercase;
+        font-family: var(--font-display);
     }
     .acs-summary-label {
-        color: #64748B;
+        color: var(--text-muted);
         font-size: 11px;
-        margin-top: 17px;
+        margin-top: 20px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
     }
     .acs-summary-value {
         color: #047857;
-        font-size: 21px;
+        font-size: 24px;
         font-weight: 800;
         line-height: 1.2;
-        margin-top: 3px;
+        margin-top: 5px;
         overflow-wrap: anywhere;
+        font-family: var(--font-display);
     }
     .acs-summary-meta {
-        color: #94A3B8;
-        font-size: 10px;
-        margin-top: 8px;
+        color: var(--text-muted);
+        font-size: 10.5px;
+        margin-top: 10px;
+        font-weight: 500;
     }
     .access-matrix {
-        background: #FFFFFF;
-        border: 1px solid #D9E3ED;
-        border-radius: 12px;
-        padding: 16px 18px 10px 18px;
-        box-shadow: 0 8px 20px rgba(0, 43, 73, 0.06);
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-radius: var(--radius-md);
+        padding: 20px 22px 14px 22px;
+        box-shadow: var(--shadow-sm);
+        font-family: var(--font-sans);
     }
     .st-key-access_matrix {
-        background: #FFFFFF;
-        border: 1px solid #D9E3ED;
-        border-radius: 12px;
-        padding: 16px 18px 12px 18px;
-        box-shadow: 0 8px 20px rgba(0, 43, 73, 0.06);
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-radius: var(--radius-md);
+        padding: 20px 22px 16px 22px;
+        box-shadow: var(--shadow-sm);
+        font-family: var(--font-sans);
     }
     .access-header {
-        color: #64748B;
-        font-size: 10px;
+        color: var(--text-muted);
+        font-size: 11px;
         font-weight: 800;
-        letter-spacing: 0.8px;
+        letter-spacing: 1px;
         text-transform: uppercase;
-        padding-bottom: 8px;
-        border-bottom: 1px solid #E2E8F0;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--border);
+        font-family: var(--font-display);
     }
     .access-module {
-        color: #002B49;
-        font-size: 13px;
+        color: var(--navy);
+        font-size: 13.5px;
         font-weight: 700;
-        padding-top: 10px;
+        padding-top: 14px;
+        font-family: var(--font-display);
     }
-    .login-panel h2,
-    .st-key-login_form_card h2 {
-        color: #002B49;
-        font-size: 25px;
-        margin: 0 0 8px 0;
+
+    /* ---- Streamlit Global Enhancements ---- */
+    .stMetric {
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-radius: var(--radius-md);
+        padding: 18px 20px;
+        box-shadow: var(--shadow-sm);
+        transition: box-shadow 0.2s ease, transform 0.2s ease;
+        font-family: var(--font-sans);
     }
-    .login-panel .login-caption,
-    .st-key-login_form_card .login-caption {
-        color: #64748B;
+    .stMetric:hover {
+        box-shadow: var(--shadow-md);
+        transform: translateY(-2px);
+    }
+    .stMetric > div > div > div[data-testid="stMetricLabel"] {
+        color: var(--text-muted) !important;
+        font-size: 11px !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.8px !important;
+        text-transform: uppercase !important;
+        font-family: var(--font-display);
+    }
+    .stMetric > div > div > div[data-testid="stMetricValue"] {
+        color: var(--navy) !important;
+        font-size: 26px !important;
+        font-weight: 800 !important;
+        font-family: var(--font-display);
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 4px;
+        background: transparent;
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+        padding: 12px 20px;
+        font-weight: 700;
+        color: var(--text-secondary);
+        transition: background-color 0.2s ease, color 0.2s ease;
         font-size: 13px;
-        margin-bottom: 28px;
+        font-family: var(--font-display);
     }
-    .login-note {
-        color: #64748B;
-        font-size: 11px;
-        line-height: 1.5;
-        margin-top: 18px;
+    .stTabs [aria-selected="true"] {
+        background: var(--blue);
+        color: #FFFFFF !important;
     }
-    @media (max-width: 700px) {
-        .login-brand, .login-panel { min-height: auto; padding: 30px 26px; }
-        .login-form-wrap, .st-key-login_form_card { min-height: auto; padding: 30px 26px; }
-        .login-brand { border-radius: 18px 18px 0 0; }
-        .login-brand h1 { font-size: 28px; }
-        .login-kicker { margin-top: 25px; }
+    .stExpander {
+        border: 1px solid var(--border-light);
+        border-radius: var(--radius-md);
+        background: var(--bg-card);
+        box-shadow: var(--shadow-sm);
+    }
+    .stExpander > summary {
+        font-weight: 700;
+        color: var(--navy);
+        font-size: 14px;
+        font-family: var(--font-display);
+    }
+    .stButton > button {
+        border-radius: var(--radius-sm);
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .stButton > button:hover {
+        transform: translateY(-1px);
+    }
+    .stButton[kind="secondary"] > button {
+        background: #FFFFFF;
+        border: 1.5px solid var(--border-light);
+        color: var(--navy);
+    }
+    .stButton[kind="secondary"] > button:hover {
+        background: #F1F5F9;
+        border-color: var(--blue);
+    }
+    .stAlert {
+        border-radius: var(--radius-sm);
+        box-shadow: var(--shadow-sm);
+    }
+    .stSuccess {
+        background: #ECFDF5;
+        border: 1px solid #A7F3D0;
+        border-radius: var(--radius-sm);
+    }
+    .stWarning {
+        background: #FFFBEB;
+        border: 1px solid #FDE68A;
+        border-radius: var(--radius-sm);
+    }
+    .stError {
+        background: #FEF2F2;
+        border: 1px solid #FECACA;
+        border-radius: var(--radius-sm);
+    }
+    .stInfo {
+        background: #EFF6FF;
+        border: 1px solid #BFDBFE;
+        border-radius: var(--radius-sm);
+    }
+    .stForm {
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-radius: var(--radius-md);
+        padding: 22px 24px;
+        box-shadow: var(--shadow-sm);
+    }
+    .stSelectbox > div > div,
+    .stMultiselect > div > div {
+        border-radius: var(--radius-sm);
+    }
+    .stDateInput > div > div {
+        border-radius: var(--radius-sm);
+    }
+    .stFileUploader {
+        border: 2px dashed var(--border-light);
+        border-radius: var(--radius-md);
+        padding: 18px;
+        background: #FAFBFC;
+        transition: border-color 0.2s ease, background 0.2s ease;
+    }
+    .stFileUploader:hover {
+        border-color: var(--blue);
+        background: #F0F7FF;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -562,26 +1107,453 @@ if "username" not in st.session_state:
 if "role" not in st.session_state:
     st.session_state.role = ""
 
+# Auto-restore session from URL query parameters on browser refresh (F5)
+cached_user = get_query_param("user")
+if cached_user and not st.session_state.authenticated:
+    norm_cached_user = str(cached_user).strip().lower()
+    if norm_cached_user in st.session_state.auth_users:
+        st.session_state.authenticated = True
+        st.session_state.username = norm_cached_user
+        st.session_state.role = st.session_state.auth_users[norm_cached_user]["role"]
+
 if not st.session_state.authenticated:
-    login_brand, login_form = st.columns([1.05, 0.95], gap="small")
-    with login_brand:
-        with st.container(key="login_brand_card"):
+    # Dedicated Executive Corporate Login Styles
+    st.markdown("""
+    <style>
+        /* Sembunyikan sidebar dan tombol collapse saat belum login */
+        [data-testid="stSidebar"],
+        [data-testid="collapsedControl"],
+        section[data-testid="stSidebar"] {
+            display: none !important;
+        }
+
+        /* Header transparan */
+        header[data-testid="stHeader"] {
+            background: transparent !important;
+        }
+
+        /* Latar belakang halaman login: Deep Navy Banking Mesh */
+        .stApp {
+            background: radial-gradient(ellipse at 50% 12%, #162E50 0%, #0B1B30 48%, #050D1A 100%) !important;
+            min-height: 100vh;
+        }
+
+        /* Container login di tengah layar */
+        .block-container {
+            max-width: 1040px !important;
+            padding-top: 3.2rem !important;
+            padding-bottom: 2.8rem !important;
+            padding-left: 1.5rem !important;
+            padding-right: 1.5rem !important;
+            margin: 0 auto !important;
+        }
+
+        /* Kartu Kiri: Brand & Info Sistem */
+        .login-brand-wrapper {
+            background: linear-gradient(155deg, #071936 0%, #002B49 48%, #004D8C 100%);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 22px;
+            padding: 38px 34px;
+            color: #FFFFFF;
+            box-shadow: 0 24px 55px -12px rgba(0, 10, 25, 0.7);
+            position: relative;
+            overflow: hidden;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .login-brand-wrapper::before {
+            content: "";
+            position: absolute;
+            top: -85px;
+            right: -85px;
+            width: 240px;
+            height: 240px;
+            background: radial-gradient(circle, rgba(251, 191, 36, 0.18) 0%, rgba(251, 191, 36, 0) 70%);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .login-brand-wrapper::after {
+            content: "";
+            position: absolute;
+            bottom: -80px;
+            left: -80px;
+            width: 220px;
+            height: 220px;
+            background: radial-gradient(circle, rgba(0, 114, 206, 0.22) 0%, rgba(0, 114, 206, 0) 70%);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .brand-badge-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(251, 191, 36, 0.14);
+            border: 1px solid rgba(251, 191, 36, 0.35);
+            color: #FDE68A;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 10.5px;
+            font-weight: 700;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+            margin-top: 14px;
+            margin-bottom: 18px;
+            width: fit-content;
+        }
+
+        .badge-dot-glow {
+            width: 7px;
+            height: 7px;
+            background-color: #FBBF24;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #FBBF24;
+        }
+
+        .brand-title-hero {
+            font-size: 29px;
+            font-weight: 800;
+            line-height: 1.25;
+            color: #FFFFFF;
+            margin: 0 0 10px 0;
+            letter-spacing: -0.4px;
+        }
+
+        .brand-gold-gradient {
+            background: linear-gradient(135deg, #FDE68A 0%, #F59E0B 50%, #D97706 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .brand-subtext {
+            color: rgba(226, 238, 255, 0.85);
+            font-size: 13px;
+            line-height: 1.6;
+            margin-bottom: 22px;
+        }
+
+        .features-pill-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 22px;
+        }
+
+        .feature-pill {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 9px 12px;
+            border-radius: 11px;
+            backdrop-filter: blur(6px);
+        }
+
+        .feature-icon-box {
+            width: 28px;
+            height: 28px;
+            border-radius: 7px;
+            background: rgba(251, 191, 36, 0.16);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+
+        .feature-info b {
+            color: #FFFFFF;
+            font-size: 12px;
+            display: block;
+        }
+
+        .feature-info span {
+            color: rgba(226, 238, 255, 0.72);
+            font-size: 10.5px;
+        }
+
+        .brand-meta-footer {
+            border-top: 1px solid rgba(255, 255, 255, 0.12);
+            padding-top: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: rgba(226, 238, 255, 0.65);
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        /* Kartu Kanan: Form Login */
+        .st-key-login_form_card {
+            background: #FFFFFF !important;
+            border: 1px solid #E2E8F0 !important;
+            border-radius: 22px !important;
+            padding: 36px 34px 28px 34px !important;
+            box-shadow: 0 24px 55px -12px rgba(0, 10, 25, 0.5) !important;
+            height: 100% !important;
+        }
+
+        /* Reset border dan background stForm di kartu login */
+        .st-key-login_form_card div[data-testid="stForm"],
+        .st-key-login_form_card .stForm {
+            border: none !important;
+            padding: 0 !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            margin: 0 !important;
+        }
+
+        .form-top-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+
+        .form-icon-emblem {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #002B49, #00529C);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 8px 18px rgba(0, 82, 156, 0.28);
+            flex-shrink: 0;
+        }
+
+        .form-headline {
+            font-size: 22px;
+            font-weight: 800;
+            color: #0F172A;
+            margin: 0;
+            letter-spacing: -0.4px;
+        }
+
+        .form-subhead {
+            font-size: 12.5px;
+            color: #64748B;
+            margin-top: 3px;
+        }
+
+        /* Input Form */
+        .st-key-login_form_card .stTextInput label {
+            font-size: 12.5px !important;
+            font-weight: 700 !important;
+            color: #1E293B !important;
+            margin-bottom: 4px !important;
+        }
+
+        .st-key-login_form_card .stTextInput input {
+            background: #F8FAFC !important;
+            border: 1.5px solid #CBD5E1 !important;
+            border-radius: 10px !important;
+            padding: 11px 14px !important;
+            font-size: 13.5px !important;
+            color: #0F172A !important;
+            transition: all 0.2s ease !important;
+        }
+
+        .st-key-login_form_card .stTextInput input:focus {
+            background: #FFFFFF !important;
+            border-color: #00529C !important;
+            box-shadow: 0 0 0 3.5px rgba(0, 82, 156, 0.15) !important;
+            outline: none !important;
+        }
+
+        /* Tombol Submit Login */
+        .st-key-login_form_card div[data-testid="stFormSubmitButton"] > button {
+            background: linear-gradient(135deg, #002B49 0%, #00529C 100%) !important;
+            color: #FFFFFF !important;
+            font-weight: 700 !important;
+            font-size: 14px !important;
+            border-radius: 11px !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            padding: 13px 20px !important;
+            box-shadow: 0 8px 20px rgba(0, 43, 73, 0.25) !important;
+            transition: all 0.2s ease !important;
+            letter-spacing: 0.3px !important;
+            margin-top: 8px !important;
+        }
+
+        .st-key-login_form_card div[data-testid="stFormSubmitButton"] > button:hover {
+            background: linear-gradient(135deg, #001F3F 0%, #004080 100%) !important;
+            box-shadow: 0 12px 26px rgba(0, 43, 73, 0.35) !important;
+            transform: translateY(-2px) !important;
+        }
+
+        /* Divider Demo */
+        .login-divider-line {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 20px 0 14px 0;
+            color: #94A3B8;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+        }
+
+        .login-divider-line::before,
+        .login-divider-line::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: #E2E8F0;
+        }
+
+        /* Kartu Demo Grid */
+        .demo-roles-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .demo-card-item {
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 10px;
+            padding: 8px;
+            text-align: center;
+            transition: all 0.2s ease;
+        }
+
+        .demo-card-item:hover {
+            border-color: #CBD5E1;
+            background: #F1F5F9;
+        }
+
+        .role-tag {
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            padding: 2px 6px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 4px;
+        }
+
+        .role-tag-admin { background: #FEE2E2; color: #991B1B; }
+        .role-tag-spv { background: #FEF3C7; color: #92400E; }
+        .role-tag-user { background: #E0F2FE; color: #075985; }
+
+        .demo-user-name {
+            font-size: 11.5px;
+            font-weight: 700;
+            color: #0F172A;
+            line-height: 1.2;
+        }
+
+        .demo-user-pwd {
+            font-size: 10px;
+            color: #64748B;
+            margin-top: 2px;
+        }
+
+        .login-footer-info {
+            text-align: center;
+            color: #94A3B8;
+            font-size: 10.5px;
+            line-height: 1.4;
+        }
+
+        @media (max-width: 820px) {
+            .block-container {
+                padding-top: 1.5rem !important;
+                padding-left: 1rem !important;
+                padding-right: 1rem !important;
+            }
+            .brand-title-hero {
+                font-size: 24px;
+            }
+            .st-key-login_form_card {
+                padding: 26px 20px !important;
+            }
+            .login-brand-wrapper {
+                padding: 28px 22px;
+            }
+            .demo-roles-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    logo_svg = get_abacus_logo_html(width=220, height=54)
+    login_brand_col, login_form_col = st.columns([1.1, 0.9], gap="medium")
+
+    with login_brand_col:
+        st.markdown(f"""
+        <div class="login-brand-wrapper">
+            <div>
+                <div>{logo_svg}</div>
+                <div class="brand-badge-pill">
+                    <span class="badge-dot-glow"></span>
+                    <span>SISTEM REKONSILIASI BCA MALANG</span>
+                </div>
+                <h1 class="brand-title-hero">
+                    Akurasi Kas &<br><span class="brand-gold-gradient">Audit Terpadu</span>
+                </h1>
+                <p class="brand-subtext">
+                    Platform rekonsiliasi kas terintegrasi untuk monitoring selisih ATM & CRM, pengelolaan kaset sislok, UK BDC, dan otomatisasi laporan operasional BCA.
+                </p>
+                <div class="features-pill-group">
+                    <div class="feature-pill">
+                        <div class="feature-icon-box">⚡</div>
+                        <div class="feature-info">
+                            <b>Auto-Append & Matching Instan</b>
+                            <span>Pencocokan transaksi ATM/CRM dengan fisik cepat & akurat</span>
+                        </div>
+                    </div>
+                    <div class="feature-pill">
+                        <div class="feature-icon-box">🛡️</div>
+                        <div class="feature-info">
+                            <b>Audit Trail & Pelacakan Petugas</b>
+                            <span>Pencatatan multi-staff, driver, dan validasi selisih harian</span>
+                        </div>
+                    </div>
+                    <div class="feature-pill">
+                        <div class="feature-icon-box">📊</div>
+                        <div class="feature-info">
+                            <b>Laporan Eksekutif & EBOS</b>
+                            <span>Rekapitulasi otomatis, visualisasi tren & ekspor Excel rapi</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="brand-meta-footer">
+                <span>🔒 256-Bit SSL Sesi Terenkripsi</span>
+                <span>Abacus Cash Solution v2.9</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with login_form_col:
+        with st.container(key="login_form_card"):
             st.markdown("""
-            <div class="login-brand">
-                <div style="font-size: 20px; font-weight: 800; letter-spacing: 1px;">ABACUS</div>
-                <div style="font-size: 10px; color: #FBBF24; letter-spacing: 2px; font-weight: 700;">CASH SOLUTION • MALANG</div>
-                <div class="login-kicker">Operational Audit Portal</div>
-                <h1>Rekonsiliasi kas,<br>lebih terukur.</h1>
-                <p>Kelola data operasional, pantau selisih, dan susun laporan audit dalam satu ruang kerja yang terkontrol.</p>
+            <div class="form-top-header">
+                <div class="form-icon-emblem">🔐</div>
+                <div>
+                    <h2 class="form-headline">Masuk ke Sistem</h2>
+                    <div class="form-subhead">Masukkan kredensial Anda untuk mengakses portal</div>
+                </div>
             </div>
             """, unsafe_allow_html=True)
-    with login_form:
-        with st.container(key="login_form_card"):
-            st.markdown("<h2>Selamat datang</h2><div class='login-caption'>Masuk untuk melanjutkan ke sistem rekonsiliasi.</div>", unsafe_allow_html=True)
+
             with st.form("login_form"):
-                login_username = st.text_input("Username", placeholder="Masukkan username")
+                login_username = st.text_input("Username / ID Petugas", placeholder="Contoh: admin / user")
                 login_password = st.text_input("Password", type="password", placeholder="Masukkan password")
-                login_submit = st.form_submit_button("🔐  Masuk ke Sistem", type="primary", use_container_width=True)
+                login_submit = st.form_submit_button("Masuk ke Sistem ➔", type="primary", use_container_width=True)
+
                 if login_submit:
                     account = st.session_state.auth_users.get(login_username.strip().lower())
                     if account and account["password"] == login_password:
@@ -595,6 +1567,7 @@ if not st.session_state.authenticated:
                         st.session_state.authenticated = True
                         st.session_state.username = login_username.strip().lower()
                         st.session_state.role = account["role"]
+                        set_query_param("user", login_username.strip().lower())
                         safe_rerun()
                     else:
                         failed_account = st.session_state.auth_users.get(login_username.strip().lower())
@@ -605,8 +1578,32 @@ if not st.session_state.authenticated:
                             "Role": failed_account["role"].title() if failed_account else "-",
                             "Status": "Gagal",
                         })
-                        st.error("Username atau password tidak valid.")
-            st.markdown("<div class='login-note'>Akses demo: admin, user, atau supervisor. Hubungi administrator untuk kredensial produksi.</div>", unsafe_allow_html=True)
+                        st.error("⚠️ Username atau password tidak valid.")
+
+            st.markdown("""
+            <div class="login-divider-line">Akses Cepat Demo</div>
+            <div class="demo-roles-container">
+                <div class="demo-card-item">
+                    <span class="role-tag role-tag-admin">Admin</span>
+                    <div class="demo-user-name">admin</div>
+                    <div class="demo-user-pwd">admin123</div>
+                </div>
+                <div class="demo-card-item">
+                    <span class="role-tag role-tag-spv">Supervisor</span>
+                    <div class="demo-user-name">supervisor</div>
+                    <div class="demo-user-pwd">supervisor123</div>
+                </div>
+                <div class="demo-card-item">
+                    <span class="role-tag role-tag-user">Operator</span>
+                    <div class="demo-user-name">user</div>
+                    <div class="demo-user-pwd">user123</div>
+                </div>
+            </div>
+            <div class="login-footer-info">
+                Gunakan kredensial resmi untuk akses operasional. Hubungi administrator bila lupa kata sandi.
+            </div>
+            """, unsafe_allow_html=True)
+
     st.stop()
 
 current_role = st.session_state.role
@@ -777,27 +1774,55 @@ if "image_store" not in st.session_state:
 data_keys = [
     "df_rekon", "df_cencon", "df_uk", "df_ebos", "df_ej", "df_sislok", "df_kolong", "image_store"
 ]
+cached_state = load_persistent_state()
 if "data_scopes" not in st.session_state:
-    st.session_state.data_scopes = {
-        "BCA": {key: st.session_state[key].copy() if hasattr(st.session_state[key], "copy") else dict(st.session_state[key]) for key in data_keys},
-        "ATMI": {
-            "df_rekon": create_empty_rekon(),
-            "df_cencon": create_empty_cencon(),
-            "df_uk": create_empty_uk(),
-            "df_ebos": create_empty_ebos(),
-            "df_ej": create_empty_ej(),
-            "df_sislok": create_empty_sislok(),
-            "df_kolong": create_empty_kolong(),
-            "image_store": {},
-        },
-    }
+    if cached_state and "data_scopes" in cached_state and isinstance(cached_state["data_scopes"], dict):
+        st.session_state.data_scopes = cached_state["data_scopes"]
+        if "active_scope" in cached_state and cached_state["active_scope"]:
+            st.session_state.active_data_scope = cached_state["active_scope"]
+        cur_sc = st.session_state.get("active_data_scope", "BCA")
+        for k in data_keys:
+            if k in st.session_state.data_scopes.get(cur_sc, {}):
+                st.session_state[k] = st.session_state.data_scopes[cur_sc][k]
+    else:
+        st.session_state.data_scopes = {
+            "BCA": {key: st.session_state[key].copy() if hasattr(st.session_state[key], "copy") else dict(st.session_state[key]) for key in data_keys},
+            "ATMI": {
+                "df_rekon": create_empty_rekon(),
+                "df_cencon": create_empty_cencon(),
+                "df_uk": create_empty_uk(),
+                "df_ebos": create_empty_ebos(),
+                "df_ej": create_empty_ej(),
+                "df_sislok": create_empty_sislok(),
+                "df_kolong": create_empty_kolong(),
+                "image_store": {},
+            },
+        }
+
 if "active_data_scope" not in st.session_state:
-    st.session_state.active_data_scope = "BCA"
+    q_sc = get_query_param("scope")
+    st.session_state.active_data_scope = q_sc if q_sc in ["BCA", "ATMI"] else "BCA"
+
+cur_sc = st.session_state.active_data_scope
+if cur_sc in st.session_state.data_scopes:
+    for k in data_keys:
+        if k in st.session_state.data_scopes[cur_sc]:
+            st.session_state[k] = st.session_state.data_scopes[cur_sc][k]
+
 if "export_columns_by_scope" not in st.session_state:
     st.session_state.export_columns_by_scope = {
         "BCA": list(st.session_state.df_rekon.columns),
         "ATMI": [],
     }
+
+# Restore navigation from URL query params on page refresh
+q_menu = get_query_param("menu")
+q_group = get_query_param("group")
+if q_group and "menu_group" not in st.session_state:
+    st.session_state["menu_group"] = q_group
+if q_menu and "nav_menu" not in st.session_state:
+    st.session_state["nav_menu"] = q_menu
+
 if "target_nav_menu" in st.session_state and st.session_state.target_nav_menu:
     st.session_state["nav_menu"] = st.session_state.target_nav_menu
     st.session_state.target_nav_menu = None
@@ -844,20 +1869,33 @@ df_rekon = auto_fill_bulan(df_rekon, "TGL_REM")
 df_rekon = remove_duplicate_rekon_rows(df_rekon)
 st.session_state.df_rekon = df_rekon
 st.session_state.data_scopes[st.session_state.active_data_scope]["df_rekon"] = df_rekon.copy()
+save_persistent_state(st.session_state.data_scopes, st.session_state.active_data_scope)
 
 # ---------------------------------------------------------
 # Sidebar Navigation & Global Filters
 # ---------------------------------------------------------
+abacus_logo_sidebar = get_abacus_logo_html(width=190, height=46)
+role_pill_class = f"role-badge-{current_role.lower()}"
+user_initial = (st.session_state.username[:2] if st.session_state.username else "US").upper()
+
 st.sidebar.markdown(f"""
-<div class="sidebar-brand">
-    <div class="brand-name">ABACUS</div>
-    <div class="brand-subtitle">CASH SOLUTION • MALANG</div>
-    <div style="font-size: 11px; color: #D9EAF8; margin-top: 13px;">Sistem Rekonsiliasi Kas</div>
+<div class="sidebar-brand-card">
+    <div class="sidebar-brand-logo">{abacus_logo_sidebar}</div>
+    <div class="sidebar-live-pill">
+        <span class="live-dot"></span>
+        <span>SISTEM AKTIF • BCA MALANG</span>
+    </div>
 </div>
-<div class="sidebar-session"><span>Sesi aktif</span><br><b>{st.session_state.username}</b> · {current_role.title()}</div>
-<div class="sidebar-section-label">Workspace</div>
+<div class="sidebar-profile-box">
+    <div class="profile-avatar">{user_initial}</div>
+    <div class="profile-info">
+        <div class="profile-name">{st.session_state.username.title()}</div>
+        <span class="profile-role-badge {role_pill_class}">{current_role.upper()}</span>
+    </div>
+</div>
 """, unsafe_allow_html=True)
-if st.sidebar.button("🚪 Logout", use_container_width=True):
+if st.sidebar.button("🚪 Logout Sesi", use_container_width=True):
+    clear_query_params()
     st.session_state.authenticated = False
     st.session_state.username = ""
     st.session_state.role = ""
@@ -948,6 +1986,9 @@ else:
 menu = selected_operational_menu if selected_top_menu in ["🏦 BCA", "🏢 ATMI"] and selected_operational_menu else selected_top_menu
 st.session_state["menu_group"] = selected_top_menu
 st.session_state["nav_menu"] = menu
+# Persist menu selection to URL query params so it survives browser refresh (F5)
+set_query_param("menu", menu)
+set_query_param("group", selected_top_menu)
 
 scope_by_menu = {"🏦 BCA": "BCA", "🏢 ATMI": "ATMI"}
 requested_data_scope = scope_by_menu.get(selected_top_menu, st.session_state.active_data_scope)
